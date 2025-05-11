@@ -1,6 +1,8 @@
-- name: Installer le serveur SSH
+- name: Installer les paquets nécessaires pour SSH et Google Authenticator
   ansible.builtin.apt:
-    name: openssh-server
+    name:
+      - openssh-server
+      - libpam-google-authenticator
     state: present
     update_cache: yes
 

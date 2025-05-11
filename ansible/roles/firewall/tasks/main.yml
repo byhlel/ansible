@@ -1,0 +1,108 @@
+- name: Installer les paquets nécessaires
+  ansible.builtin.apt:
+    name:
+      - iptables-persistent
+      - fail2ban
+    state: present
+    update_cache: yes
+
+- name: Bloquer toutes les connexions entrantes IPv6
+  ansible.builtin.command: ip6tables -P INPUT DROP
+
+- name: Bloquer toutes les connexions sortantes IPv6 sauf loopback
+  ansible.builtin.shell: |
+    ip6tables -P OUTPUT DROP
+    ip6tables -A OUTPUT -o lo -j ACCEPT
+    ip6tables -A OUTPUT -d ::1 -j ACCEPT
+
+- name: Définir les règles IPv4 entrantes
+  ansible.builtin.shell: |
+    iptables -F
+    iptables -P INPUT DROP
+    iptables -P FORWARD DROP
+    iptables -P OUTPUT ACCEPT
+
+    # Autoriser loopback
+    iptables -A INPUT -i lo -j ACCEPT
+    iptables -A OUTPUT -o lo -j ACCEPT
+
+    # Autoriser SSH (port 22)
+    iptables -A INPUT -p tcp --dport 22 -j ACCEPT
+
+    # Autoriser HTTP et HTTPS
+    iptables -A INPUT -p tcp --dport 80 -j ACCEPT
+    iptables -A INPUT -p tcp --dport 443 -j ACCEPT
+    iptables -A INPUT -p tcp --dport 10000 -j ACCEPT
+
+    # Tracer les paquets refusés
+    iptables -A INPUT -j LOG --log-prefix "[iptables drop] " --log-level 7
+
+    # Drop tout le reste
+    iptables -A INPUT -j DROP
+
+  args:
+    warn: false
+
+- name: Rendre les règles persistantes
+  ansible.builtin.command: netfilter-persistent save
+
+- name: Configurer jail SSH pour Fail2Ban
+  ansible.builtin.copy:
+    dest: /etc/fail2ban/jail.d/ssh.conf
+    content: |
+      [sshd]
+      enabled = true
+      port = ssh
+      filter = sshd
+      logpath = /var/log/auth.log
+      maxretry = 3
+      bantime = 300
+      backend = systemd
+
+- name: Configurer jail HTTP bruteforce
+  ansible.builtin.copy:
+    dest: /etc/fail2ban/jail.d/http.conf
+    content: |
+      [http-methods]
+      enabled = true
+      filter = http-methods
+      logpath = /var/log/apache2/*access.log
+      maxretry = 3
+      findtime = 600
+      bantime = 300
+      action = iptables[name=HTTPMethod, port=http, protocol=tcp]
+
+- name: Créer filtre http-methods
+  ansible.builtin.copy:
+    dest: /etc/fail2ban/filter.d/http-methods.conf
+    content: |
+      [Definition]
+      failregex = ^<HOST> -.*"(?!GET|POST|PUT).*
+      ignoreregex =
+
+- name: Configurer jail portscan
+  ansible.builtin.copy:
+    dest: /etc/fail2ban/jail.d/portscan.conf
+    content: |
+      [portscan]
+      enabled = true
+      filter = portscan
+      logpath = /var/log/syslog
+      maxretry = 3
+      bantime = 300
+      findtime = 300
+      action = iptables-allports[name=PortScan, protocol=all]
+
+- name: Créer filtre portscan
+  ansible.builtin.copy:
+    dest: /etc/fail2ban/filter.d/portscan.conf
+    content: |
+      [Definition]
+      failregex = nmap scan initiated .* <HOST>
+      ignoreregex =
+
+- name: Activer et démarrer fail2ban
+  ansible.builtin.service:
+    name: fail2ban
+    state: started
+    enabled: true

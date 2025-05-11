@@ -1,0 +1,79 @@
+---
+# roles/topgun/tasks/main.yml
+
+- name: Créer le groupe TOPGUN
+  ansible.builtin.group:
+    name: TOPGUN
+    state: present
+
+- name: Créer l'utilisateur maverik
+  ansible.builtin.user:
+    name: maverik
+    groups: TOPGUN
+    shell: /bin/bash
+    create_home: yes
+    password: "!"  # mot de passe inconnu
+
+- name: Créer l'utilisateur charlie
+  ansible.builtin.user:
+    name: charlie
+    groups: TOPGUN
+    shell: /bin/bash
+    create_home: yes
+    password: "!"
+
+- name: Créer l'utilisateur goose
+  ansible.builtin.user:
+    name: goose
+    groups: TOPGUN
+    shell: /bin/bash
+    create_home: yes
+
+- name: Configurer sudo pour maverik (reboot + apt)
+  ansible.builtin.copy:
+    dest: /etc/sudoers.d/maverik
+    content: |
+      maverik ALL=(ALL) NOPASSWD: /sbin/reboot, /usr/bin/apt update, /usr/bin/apt upgrade
+    owner: root
+    group: root
+    mode: '0440'
+
+- name: Configurer sudo pour charlie (full root + timeout 15min)
+  ansible.builtin.copy:
+    dest: /etc/sudoers.d/charlie
+    content: |
+      Defaults:charlie timestamp_timeout=15
+      charlie ALL=(ALL) ALL
+    owner: root
+    group: root
+    mode: '0440'
+
+- name: Restreindre les fonctionnalités SSH pour goose
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    line: 'Match User goose\n  AllowTcpForwarding no\n  X11Forwarding no\n  AllowAgentForwarding no\n  PermitTTY yes\n  PermitOpen none'
+    create: yes
+    insertafter: EOF
+  notify: Redémarrer SSH
+
+# Authentification Google Authenticator : ces fichiers doivent être installés/configurés manuellement ou via un rôle externe
+- name: Installer Google Authenticator PAM (si non présent)
+  ansible.builtin.apt:
+    name: libpam-google-authenticator
+    state: present
+
+- name: Forcer Google Authenticator uniquement pour maverik (PAM)
+  ansible.builtin.copy:
+    src: pam_maverik
+    dest: /etc/pam.d/sshd_maverik
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Forcer Google Authenticator + clé publique pour charlie (PAM + SSH)
+  ansible.builtin.copy:
+    src: pam_charlie
+    dest: /etc/pam.d/sshd_charlie
+    owner: root
+    group: root
+    mode: '0644'
