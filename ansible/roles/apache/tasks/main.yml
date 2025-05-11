@@ -1,0 +1,94 @@
+- name: Installer Apache et modules requis
+  ansible.builtin.apt:
+    name:
+      - apache2
+      - libapache2-mod-remoteip
+      - libapache2-mod-auth-kerberos
+      - libapache2-mod-security2
+    state: present
+    update_cache: yes
+
+- name: Activer les modules Apache nécessaires
+  ansible.builtin.command: a2enmod {{ item }}
+  loop:
+    - ssl
+    - remoteip
+    - auth_kerb
+    - security2
+    - headers
+  notify: Redémarrer Apache
+  register: a2enmod_result
+  changed_when: a2enmod_result.rc == 0
+  failed_when: false
+
+- name: Désactiver les modules Apache inutiles
+  ansible.builtin.command: a2dismod {{ item }}
+  loop:
+    - status
+    - autoindex
+    - userdir
+    - cgi
+  notify: Redémarrer Apache
+  register: a2dismod_result
+  changed_when: a2dismod_result.rc == 0
+  failed_when: false
+
+- name: Copier le VirtualHost port 8000
+  ansible.builtin.template:
+    src: files/wordpress-8000.conf.j2
+    dest: /etc/apache2/sites-available/wordpress-8000.conf
+  notify: Redémarrer Apache
+
+- name: Copier le VirtualHost port 10000
+  ansible.builtin.template:
+    src: files/wordpress-10000-ssl.conf.j2
+    dest: /etc/apache2/sites-available/wordpress-10000-ssl.conf
+  notify: Redémarrer Apache
+
+- name: Activer les VirtualHosts
+  ansible.builtin.command: a2ensite {{ item }}
+  loop:
+    - wordpress-8000.conf
+    - wordpress-10000-ssl.conf
+  notify: Redémarrer Apache
+
+- name: Durcissement Apache
+  ansible.builtin.copy:
+    dest: /etc/apache2/conf-available/security-hardening.conf
+    content: |
+      ServerSignature Off
+      ServerTokens Prod
+      TraceEnable off
+
+      <IfModule mod_headers.c>
+        Header always set X-Frame-Options "SAMEORIGIN"
+        Header always set X-Content-Type-Options "nosniff"
+        Header always set X-XSS-Protection "1; mode=block"
+        Header always set Content-Security-Policy "default-src 'self';"
+      </IfModule>
+  notify: Redémarrer Apache
+
+- name: Activer la conf de durcissement
+  ansible.builtin.command: a2enconf security-hardening
+  notify: Redémarrer Apache
+
+- name: Définir les permissions du site WordPress
+  ansible.builtin.file:
+    path: /var/www/wordpress
+    state: directory
+    recurse: yes
+    owner: www-data
+    group: www-data
+    mode: "0755"
+
+- name: Fixer les permissions des fichiers WordPress
+  ansible.builtin.find:
+    paths: /var/www/wordpress
+    file_type: file
+  register: wp_files
+
+- name: Appliquer chmod 644 sur les fichiers
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    mode: '0644'
+  loop: "{{ wp_files.files }}"

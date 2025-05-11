@@ -1,0 +1,25 @@
+---
+- name: Configuration de NGINX
+  hosts: nginx
+  become: true
+  roles:
+    - nginx
+
+- name: Configuration de Apache et WordPress
+  hosts: apache
+  become: true
+  roles:
+    - apache
+
+- name: Configuration du SSH et des utilisateurs
+  hosts: all
+  become: true
+  roles:
+    - ssh
+    - users
+
+- name: Configuration du firewall et Fail2Ban
+  hosts: all
+  become: true
+  roles:
+    - firewall

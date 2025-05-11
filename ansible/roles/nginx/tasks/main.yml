@@ -1,0 +1,46 @@
+---
+- name: Installer NGINX
+  apt:
+    name: nginx
+    state: present
+
+- name: Créer un répertoire pour les certificats SSL
+  file:
+    path: /etc/nginx/ssl
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Copier le certificat SSL
+  copy:
+    src: files/rootCA.crt
+    dest: /etc/nginx/ssl/rootCA.crt
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Copier la clé privée SSL
+  copy:
+    src: files/rootCA.key.txt
+    dest: /etc/nginx/ssl/rootCA.key
+    owner: root
+    group: root
+    mode: '0600'
+
+- name: Copier la page index.html
+  copy:
+    src: files/index.html
+    dest: /var/www/html/index.html
+    owner: www-data
+    group: www-data
+    mode: '0644'
+
+- name: Copier le fichier de configuration principal NGINX
+  copy:
+    src: files/nginx.conf
+    dest: /etc/nginx/nginx.conf
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Restart NGINX

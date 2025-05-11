@@ -1,0 +1,104 @@
+- name: Installer MariaDB
+  ansible.builtin.apt:
+    name: mariadb-server
+    state: present
+    update_cache: yes
+
+- name: Exécuter la sécurisation MySQL (manuel si besoin)                                      # TO MODIFY
+  ansible.builtin.debug:                                                                      # TO MODIFY
+    msg: "Exécutez manuellement 'mysql_secure_installation' si vous voulez renforcer la sécurité."  # TO MODIFY
+
+- name: Installer PHP-FPM et extensions requises
+  ansible.builtin.apt:
+    name:
+      - php-fpm
+      - php-mysql
+      - php-gd
+      - php-xml
+      - php-mbstring
+      - php-curl
+    state: present
+
+- name: Activer PHP-FPM
+  ansible.builtin.service:
+    name: php7.4-fpm
+    enabled: yes
+    state: started
+
+- name: Créer la base de données WordPress
+  community.mysql.mysql_db:
+    name: wordpress
+    encoding: utf8mb4
+    collation: utf8mb4_unicode_ci
+    state: present
+
+- name: Créer l'utilisateur WordPress
+  community.mysql.mysql_user:
+    name: wpuser
+    password: "MotDePasseComplexe"      # TO MODIFY
+    priv: 'wordpress.*:ALL'
+    host: localhost
+    state: present
+
+- name: Télécharger WordPress
+  ansible.builtin.get_url:
+    url: https://fr.wordpress.org/latest-fr_FR.tar.gz
+    dest: /tmp/latest-fr_FR.tar.gz
+
+- name: Extraire WordPress
+  ansible.builtin.unarchive:
+    src: /tmp/latest-fr_FR.tar.gz
+    dest: /tmp/
+    remote_src: yes
+
+- name: Copier WordPress dans /var/www/wordpress
+  ansible.builtin.command: rsync -av /tmp/wordpress/ /var/www/wordpress/
+  args:
+    creates: /var/www/wordpress/index.php
+
+- name: Copier le fichier wp-config.php
+  ansible.builtin.template:
+    src: wp-config.php.j2
+    dest: /var/www/wordpress/wp-config.php
+    owner: www-data
+    group: www-data
+    mode: '0644'
+
+- name: Fixer les permissions des fichiers
+  ansible.builtin.file:
+    path: /var/www/wordpress
+    recurse: yes
+    owner: www-data
+    group: www-data
+
+- name: Corriger les droits des dossiers
+  ansible.builtin.find:
+    paths: /var/www/wordpress
+    file_type: directory
+  register: wp_dirs
+
+- name: Appliquer chmod 755 aux dossiers
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    mode: '0755'
+  loop: "{{ wp_dirs.files }}"
+
+- name: Corriger les droits des fichiers
+  ansible.builtin.find:
+    paths: /var/www/wordpress
+    file_type: file
+  register: wp_files
+
+- name: Appliquer chmod 644 aux fichiers
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    mode: '0644'
+  loop: "{{ wp_files.files }}"
+
+- name: Activer les modules Apache pour PHP-FPM
+  ansible.builtin.command: a2enmod {{ item }}
+  loop:
+    - proxy_fcgi
+    - setenvif
+    - rewrite
+  notify: Redémarrer Apache
