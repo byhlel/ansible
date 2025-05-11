@@ -6,42 +6,119 @@
     state: present
     update_cache: yes
 
-- name: Bloquer toutes les connexions entrantes IPv6
-  ansible.builtin.command: ip6tables -P INPUT DROP
+# IPV6
 
-- name: Bloquer toutes les connexions sortantes IPv6 sauf loopback
-  ansible.builtin.shell: |
-    ip6tables -P OUTPUT DROP
-    ip6tables -A OUTPUT -o lo -j ACCEPT
-    ip6tables -A OUTPUT -d ::1 -j ACCEPT
+- name: Vider toutes les chaînes IPv6
+  ansible.builtin.iptables:
+    table: filter
+    chain: "{{ item }}"
+    ip_version: 6
+    flush: yes
+  loop:
+    - INPUT
+    - FORWARD
+    - OUTPUT
 
-- name: Définir les règles IPv4 entrantes
-  ansible.builtin.shell: |
-    iptables -F
-    iptables -P INPUT DROP
-    iptables -P FORWARD DROP
-    iptables -P OUTPUT ACCEPT
+- name: Définir la politique par défaut OUTPUT IPv6 sur DROP
+  ansible.builtin.iptables:
+    table: filter
+    chain: OUTPUT
+    ip_version: 6
+    policy: DROP
 
-    # Autoriser loopback
-    iptables -A INPUT -i lo -j ACCEPT
-    iptables -A OUTPUT -o lo -j ACCEPT
+- name: Autoriser le trafic sortant IPv6 sur l'interface loopback
+  ansible.builtin.iptables:
+    table: filter
+    chain: OUTPUT
+    ip_version: 6
+    out_interface: lo
+    jump: ACCEPT
 
-    # Autoriser SSH (port 22)
-    iptables -A INPUT -p tcp --dport 22 -j ACCEPT
+- name: Autoriser le trafic vers ::1 en IPv6
+  ansible.builtin.iptables:
+    table: filter
+    chain: OUTPUT
+    ip_version: 6
+    destination: ::1
+    jump: ACCEPT
 
-    # Autoriser HTTP et HTTPS
-    iptables -A INPUT -p tcp --dport 80 -j ACCEPT
-    iptables -A INPUT -p tcp --dport 443 -j ACCEPT
-    iptables -A INPUT -p tcp --dport 10000 -j ACCEPT
 
-    # Tracer les paquets refusés
-    iptables -A INPUT -j LOG --log-prefix "[iptables drop] " --log-level 7
+# IPV4
 
-    # Drop tout le reste
-    iptables -A INPUT -j DROP
+- name: Vider toutes les chaînes IPv4
+  ansible.builtin.iptables:
+    table: filter
+    chain: "{{ item }}"
+    ip_version: 4
+    flush: yes
+  loop:
+    - INPUT
+    - FORWARD
+    - OUTPUT
 
-  args:
-    warn: false
+- name: Définir la politique par défaut des chaînes IPv4
+  ansible.builtin.iptables:
+    table: filter
+    chain: "{{ item.chain }}"
+    ip_version: 4
+    policy: "{{ item.policy }}"
+  loop:
+    - { chain: INPUT,   policy: DROP }
+    - { chain: FORWARD, policy: DROP }
+    - { chain: OUTPUT,  policy: ACCEPT }
+
+- name: Autoriser loopback en entrée IPv4
+  ansible.builtin.iptables:
+    table: filter
+    chain: INPUT
+    ip_version: 4
+    in_interface: lo
+    jump: ACCEPT
+
+- name: Autoriser loopback en sortie IPv4
+  ansible.builtin.iptables:
+    table: filter
+    chain: OUTPUT
+    ip_version: 4
+    out_interface: lo
+    jump: ACCEPT
+
+- name: Autoriser SSH (port 22) en entrée IPv4
+  ansible.builtin.iptables:
+    table: filter
+    chain: INPUT
+    ip_version: 4
+    protocol: tcp
+    destination_port: 22
+    jump: ACCEPT
+
+- name: Autoriser HTTP/HTTPS et port 10000 en entrée IPv4
+  ansible.builtin.iptables:
+    table: filter
+    chain: INPUT
+    ip_version: 4
+    protocol: tcp
+    destination_port:
+      - 80
+      - 443
+      - 10000
+    jump: ACCEPT
+
+- name: Tracer les paquets refusés en entrée IPv4
+  ansible.builtin.iptables:
+    table: filter
+    chain: INPUT
+    ip_version: 4
+    jump: LOG
+    log_prefix: "[iptables drop] "
+    log_level: 7
+
+- name: Dropper tout le reste en entrée IPv4
+  ansible.builtin.iptables:
+    table: filter
+    chain: INPUT
+    ip_version: 4
+    jump: DROP
 
 - name: Rendre les règles persistantes
   ansible.builtin.command: netfilter-persistent save
