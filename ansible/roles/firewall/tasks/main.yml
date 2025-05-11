@@ -1,185 +1,40 @@
-- name: Installer les paquets nécessaires
+- name: Installer les paquets nécessaires pour SSH et Google Authenticator
   ansible.builtin.apt:
     name:
-      - iptables-persistent
-      - fail2ban
+      - openssh-server
+      - libpam-google-authenticator
     state: present
     update_cache: yes
 
-# IPV6
-
-- name: Vider toutes les chaînes IPv6
-  ansible.builtin.iptables:
-    table: filter
-    chain: "{{ item }}"
-    ip_version: ipv6
-    flush: yes
-  loop:
-    - INPUT
-    - FORWARD
-    - OUTPUT
-
-- name: Définir la politique par défaut OUTPUT IPv6 sur DROP
-  ansible.builtin.iptables:
-    table: filter
-    chain: OUTPUT
-    ip_version: ipv6
-    policy: DROP
-
-- name: Autoriser le trafic sortant IPv6 sur l'interface loopback
-  ansible.builtin.iptables:
-    table: filter
-    chain: OUTPUT
-    ip_version: ipv6
-    out_interface: lo
-    jump: ACCEPT
-
-- name: Autoriser le trafic vers ::1 en IPv6
-  ansible.builtin.iptables:
-    table: filter
-    chain: OUTPUT
-    ip_version: ipv6
-    destination: ::1
-    jump: ACCEPT
-
-
-# IPV4
-
-- name: Vider toutes les chaînes IPv4
-  ansible.builtin.iptables:
-    table: filter
-    chain: "{{ item }}"
-    ip_version: ipv4
-    flush: yes
-  loop:
-    - INPUT
-    - FORWARD
-    - OUTPUT
-
-- name: Définir la politique par défaut des chaînes IPv4
-  ansible.builtin.iptables:
-    table: filter
-    chain: "{{ item.chain }}"
-    ip_version: ipv4
-    policy: "{{ item.policy }}"
-  loop:
-    - { chain: INPUT,   policy: DROP }
-    - { chain: FORWARD, policy: DROP }
-    - { chain: OUTPUT,  policy: ACCEPT }
-
-- name: Autoriser loopback en entrée IPv4
-  ansible.builtin.iptables:
-    table: filter
-    chain: INPUT
-    ip_version: ipv4
-    in_interface: lo
-    jump: ACCEPT
-
-- name: Autoriser loopback en sortie IPv4
-  ansible.builtin.iptables:
-    table: filter
-    chain: OUTPUT
-    ip_version: ipv4
-    out_interface: lo
-    jump: ACCEPT
-
-- name: Autoriser SSH (port 22) en entrée IPv4
-  ansible.builtin.iptables:
-    table: filter
-    chain: INPUT
-    ip_version: ipv4
-    protocol: tcp
-    destination_port: 22
-    jump: ACCEPT
-
-- name: Autoriser HTTP/HTTPS et port 10000 en entrée IPv4
-  ansible.builtin.iptables:
-    table: filter
-    chain: INPUT
-    ip_version: ipv4
-    protocol: tcp
-    destination_port:
-      - 80
-      - 443
-      - 10000
-    jump: ACCEPT
-
-- name: Tracer les paquets refusés en entrée IPv4
-  ansible.builtin.iptables:
-    table: filter
-    chain: INPUT
-    ip_version: ipv4
-    jump: LOG
-    log_prefix: "[iptables drop] "
-    log_level: 7
-
-- name: Dropper tout le reste en entrée IPv4
-  ansible.builtin.iptables:
-    table: filter
-    chain: INPUT
-    ip_version: ipv4
-    jump: DROP
-
-- name: Rendre les règles persistantes
-  ansible.builtin.command: netfilter-persistent save
-
-- name: Configurer jail SSH pour Fail2Ban
+- name: Copier la configuration SSH principale
   ansible.builtin.copy:
-    dest: /etc/fail2ban/jail.d/ssh.conf
-    content: |
-      [sshd]
-      enabled = true
-      port = ssh
-      filter = sshd
-      logpath = /var/log/auth.log
-      maxretry = 3
-      bantime = 300
-      backend = systemd
+    src: sshd_config
+    dest: /etc/ssh/sshd_config
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Redémarrer SSH
 
-- name: Configurer jail HTTP bruteforce
+- name: Copier le fichier PAM sshd
   ansible.builtin.copy:
-    dest: /etc/fail2ban/jail.d/http.conf
-    content: |
-      [http-methods]
-      enabled = true
-      filter = http-methods
-      logpath = /var/log/apache2/*access.log
-      maxretry = 3
-      findtime = 600
-      bantime = 300
-      action = iptables[name=HTTPMethod, port=http, protocol=tcp]
+    src: sshd
+    dest: /etc/pam.d/sshd
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Redémarrer SSH
 
-- name: Créer filtre http-methods
+- name: Copier la configuration PAM commune
   ansible.builtin.copy:
-    dest: /etc/fail2ban/filter.d/http-methods.conf
-    content: |
-      [Definition]
-      failregex = ^<HOST> -.*"(?!GET|POST|PUT).*
-      ignoreregex =
+    src: files/common-auth
+    dest: /etc/pam.d/common-auth
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Redémarrer SSH
 
-- name: Configurer jail portscan
-  ansible.builtin.copy:
-    dest: /etc/fail2ban/jail.d/portscan.conf
-    content: |
-      [portscan]
-      enabled = true
-      filter = portscan
-      logpath = /var/log/syslog
-      maxretry = 3
-      bantime = 300
-      findtime = 300
-      action = iptables-allports[name=PortScan, protocol=all]
-
-- name: Créer filtre portscan
-  ansible.builtin.copy:
-    dest: /etc/fail2ban/filter.d/portscan.conf
-    content: |
-      [Definition]
-      failregex = nmap scan initiated .* <HOST>
-      ignoreregex =
-
-- name: Activer et démarrer fail2ban
+- name: S'assurer que le service SSH est activé et lancé
   ansible.builtin.service:
-    name: fail2ban
+    name: ssh
+    enabled: yes
     state: started
-    enabled: true
