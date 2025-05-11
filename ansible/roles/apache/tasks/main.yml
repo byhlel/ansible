@@ -92,3 +92,26 @@
     path: "{{ item.path }}"
     mode: '0644'
   loop: "{{ wp_files.files }}"
+
+- name: Modifier ports.conf
+  ansible.builtin.copy:
+    dest: /etc/apache2/ports.conf
+    content: |
+      Listen 8000
+      Listen 10000
+
+      <IfModule ssl_module>
+          #Listen 443
+      </IfModule>
+
+      <IfModule mod_gnutls.c>
+          #Listen 443
+      </IfModule>
+  notify: Redémarrer Apache
+
+- name: Désactiver les VirtualHosts par défaut sur le port 80
+  ansible.builtin.command: a2dissite {{ item }}
+  loop:
+    - 000-default.conf
+    - default-ssl.conf
+  notify: Redémarrer Apache

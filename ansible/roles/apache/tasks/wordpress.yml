@@ -35,7 +35,7 @@
 - name: Créer l'utilisateur WordPress
   community.mysql.mysql_user:
     name: wpuser
-    password: "MotDePasseComplexe"      # TO MODIFY
+    password: "MotDePasseComplexe"                        # TO MODIFY
     priv: 'wordpress.*:ALL'
     host: localhost
     state: present

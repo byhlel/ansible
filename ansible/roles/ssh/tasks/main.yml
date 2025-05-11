@@ -1,0 +1,38 @@
+- name: Installer le serveur SSH
+  ansible.builtin.apt:
+    name: openssh-server
+    state: present
+    update_cache: yes
+
+- name: Copier la configuration SSH principale
+  ansible.builtin.copy:
+    src: sshd_config
+    dest: /etc/ssh/sshd_config
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Redémarrer SSH
+
+- name: Copier le fichier PAM sshd
+  ansible.builtin.copy:
+    src: sshd
+    dest: /etc/pam.d/sshd
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Redémarrer SSH
+
+- name: Copier la configuration PAM commune
+  ansible.builtin.copy:
+    src: common_auth
+    dest: /etc/pam.d/common-auth
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Redémarrer SSH
+
+- name: S'assurer que le service SSH est activé et lancé
+  ansible.builtin.service:
+    name: ssh
+    enabled: yes
+    state: started
