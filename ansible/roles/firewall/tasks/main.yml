@@ -12,7 +12,7 @@
   ansible.builtin.iptables:
     table: filter
     chain: "{{ item }}"
-    ip_version: 6
+    ip_version: ipv6
     flush: yes
   loop:
     - INPUT
@@ -23,14 +23,14 @@
   ansible.builtin.iptables:
     table: filter
     chain: OUTPUT
-    ip_version: 6
+    ip_version: ipv6
     policy: DROP
 
 - name: Autoriser le trafic sortant IPv6 sur l'interface loopback
   ansible.builtin.iptables:
     table: filter
     chain: OUTPUT
-    ip_version: 6
+    ip_version: ipv6
     out_interface: lo
     jump: ACCEPT
 
@@ -38,7 +38,7 @@
   ansible.builtin.iptables:
     table: filter
     chain: OUTPUT
-    ip_version: 6
+    ip_version: ipv6
     destination: ::1
     jump: ACCEPT
 
@@ -49,7 +49,7 @@
   ansible.builtin.iptables:
     table: filter
     chain: "{{ item }}"
-    ip_version: 4
+    ip_version: ipv4
     flush: yes
   loop:
     - INPUT
@@ -60,7 +60,7 @@
   ansible.builtin.iptables:
     table: filter
     chain: "{{ item.chain }}"
-    ip_version: 4
+    ip_version: ipv4
     policy: "{{ item.policy }}"
   loop:
     - { chain: INPUT,   policy: DROP }
@@ -71,7 +71,7 @@
   ansible.builtin.iptables:
     table: filter
     chain: INPUT
-    ip_version: 4
+    ip_version: ipv4
     in_interface: lo
     jump: ACCEPT
 
@@ -79,7 +79,7 @@
   ansible.builtin.iptables:
     table: filter
     chain: OUTPUT
-    ip_version: 4
+    ip_version: ipv4
     out_interface: lo
     jump: ACCEPT
 
@@ -87,7 +87,7 @@
   ansible.builtin.iptables:
     table: filter
     chain: INPUT
-    ip_version: 4
+    ip_version: ipv4
     protocol: tcp
     destination_port: 22
     jump: ACCEPT
@@ -96,7 +96,7 @@
   ansible.builtin.iptables:
     table: filter
     chain: INPUT
-    ip_version: 4
+    ip_version: ipv4
     protocol: tcp
     destination_port:
       - 80
@@ -108,7 +108,7 @@
   ansible.builtin.iptables:
     table: filter
     chain: INPUT
-    ip_version: 4
+    ip_version: ipv4
     jump: LOG
     log_prefix: "[iptables drop] "
     log_level: 7
@@ -117,7 +117,7 @@
   ansible.builtin.iptables:
     table: filter
     chain: INPUT
-    ip_version: 4
+    ip_version: ipv4
     jump: DROP
 
 - name: Rendre les règles persistantes
