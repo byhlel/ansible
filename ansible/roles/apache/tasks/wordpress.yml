@@ -1,3 +1,8 @@
+ vars:
+    db_name: "my_app_db"
+    db_user: "my_app_user"
+    db_password: "secure_password123"
+
 - name: Installer MariaDB
   ansible.builtin.apt:
     name: mariadb-server
@@ -21,24 +26,33 @@
 
 - name: Activer PHP-FPM
   ansible.builtin.service:
-    name: php7.4-fpm
+    name: php8.2-fpm
     enabled: yes
     state: started
 
-- name: Créer la base de données WordPress
-  community.mysql.mysql_db:
-    name: wordpress
-    encoding: utf8mb4
-    collation: utf8mb4_unicode_ci
-    state: present
+- name: Install MySQL Python client
+      ansible.builtin.apt:
+        name: python3-pymysql
+        state: present
+      when: ansible_os_family == 'Debian'
 
-- name: Créer l'utilisateur WordPress
-  community.mysql.mysql_user:
-    name: wpuser
-    password: "MotDePasseComplexe"                        # TO MODIFY
-    priv: 'wordpress.*:ALL'
-    host: localhost
+- name: Ensure database exists
+  community.mysql.mysql_db:
+    name: "{{ db_name }}"
     state: present
+    login_user: "root"
+    login_password: "{{ mysql_root_password }}"
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+
+- name: Create database user with privileges
+  community.mysql.mysql_user:
+    name: "{{ db_user }}"
+    password: "{{ db_password }}"
+    priv: "{{ db_name }}.*:ALL"
+    state: present
+    login_user: "root"
+    login_password: "{{ mysql_root_password }}"
+    login_unix_socket: /var/run/mysqld/mysqld.sock
 
 - name: Télécharger WordPress
   ansible.builtin.get_url:
@@ -58,7 +72,7 @@
 
 - name: Copier le fichier wp-config.php
   ansible.builtin.template:
-    src: wp-config.php.j2
+    src: files/wp-config.php
     dest: /var/www/wordpress/wp-config.php
     owner: www-data
     group: www-data
