@@ -2,6 +2,7 @@
   ansible.builtin.apt:
     name:
       - apache2
+      - libapache2-mod-auth-gssapi
       - libapache2-mod-security2
     state: present
     update_cache: yes

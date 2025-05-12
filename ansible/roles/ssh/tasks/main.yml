@@ -1,40 +1,165 @@
-- name: Installer les paquets nécessaires pour SSH et Google Authenticator
-  ansible.builtin.apt:
+# Installation des paquets requis
+- name: Installer OpenSSH et PAM Google Authenticator
+  apt:
     name:
-      - openssh-server
-      - libpam-google-authenticator
+      - openssh-server               # Serveur SSH
+      - libpam-google-authenticator  # Module PAM pour TOTP
     state: present
     update_cache: yes
 
-- name: Copier la configuration SSH principale
-  ansible.builtin.copy:
-    src: sshd_config
-    dest: /etc/ssh/sshd_config
-    owner: root
-    group: root
-    mode: '0644'
+- name: Définir le port SSH
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?\s*Port\s+'
+    line: "Port 22"
   notify: Redémarrer SSH
 
-- name: Copier le fichier PAM sshd
-  ansible.builtin.copy:
-    src: sshd
-    dest: /etc/pam.d/sshd
-    owner: root
-    group: root
-    mode: '0644'
+- name: Forcer SSH en IPv4 seulement
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?\s*AddressFamily\s+'
+    line: "AddressFamily inet"
   notify: Redémarrer SSH
 
-- name: Copier la configuration PAM commune
-  ansible.builtin.copy:
-    src: files/common-auth
-    dest: /etc/pam.d/common-auth
-    owner: root
-    group: root
-    mode: '0644'
+- name: Interdire la connexion root
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?PermitRootLogin'
+    line: 'PermitRootLogin no'
+
+- name: Augmenter le niveau de log pour tracer les échecs
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?LogLevel'
+    line: 'LogLevel VERBOSE'
+
+- name: Activer UsePAM
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?\s*UsePAM\s+'
+    line: 'UsePAM yes'
   notify: Redémarrer SSH
 
-- name: S'assurer que le service SSH est activé et lancé
-  ansible.builtin.service:
-    name: ssh
-    enabled: yes
-    state: started
+- name: Activer ChallengeResponseAuthentication
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?\s*ChallengeResponseAuthentication\s+'
+    line: 'ChallengeResponseAuthentication yes'
+  notify: Redémarrer SSH
+
+# Activation de Google Authenticator dans PAM pour SSH
+- name: Ajouter pam_google_authenticator pour SSH
+  lineinfile:
+    path: /etc/pam.d/sshd
+    insertafter: '^\s*#%PAM-1.0'
+    line: 'auth required pam_google_authenticator.so nullok'
+
+# Création du groupe d'administration
+- name: Créer le groupe TOPGUN
+  group:
+    name: "TOPGUN"
+    state: present
+
+# ---- Utilisateur maverik ----
+- name: Créer l'utilisateur maverik
+  user:
+    name: maverik
+    groups: "TOPGUN"
+    shell: /bin/bash
+    create_home: yes
+    password_lock: yes  # mot de passe verrouillé
+
+- name: Initialiser Google Authenticator pour maverik
+  expect:
+    command: google-authenticator -t -d -f
+    responses:
+      'Do you want me to update your .*': 'y'
+      'Do you want to disallow multiple uses of the same token.*': 'y'
+      'By default, tokens are good for.*': 'y'
+      'Do you want me to enable rate-limiting .*': 'y'
+  become_user: maverik
+  args:
+    creates: /home/maverik/.google_authenticator
+
+- name: Restreindre l'authentification SSH pour maverik
+  blockinfile:
+    path: /etc/ssh/sshd_config
+    marker: "# {mark} MAVERIK"
+    block: |
+      Match User maverik
+        AuthenticationMethods keyboard-interactive
+        PasswordAuthentication no
+        PubkeyAuthentication no
+  notify: Redémarrer SSH
+
+- name: Donner droits sudo limités à maverik
+  copy:
+    dest: /etc/sudoers.d/20-maverik
+    mode: '0440'
+    content: |
+      # maverik peut reboot et mise à jour sans mot de passe
+      maverik ALL=(root) NOPASSWD: /sbin/reboot, /usr/bin/apt update, /usr/bin/apt upgrade
+
+# ---- Utilisateur charlie ----
+- name: Créer l'utilisateur charlie
+  user:
+    name: charlie
+    groups: "TOPGUN"
+    shell: /bin/bash
+    create_home: yes
+    password_lock: yes
+
+- name: Initialiser Google Authenticator pour charlie
+  expect:
+    command: google-authenticator -t -d -f
+    responses:
+      'Do you want me to update your .*': 'y'
+      'Do you want to disallow multiple uses of the same token.*': 'y'
+      'By default, tokens are good for.*': 'y'
+      'Do you want me to enable rate-limiting .*': 'y'
+  become_user: charlie
+  args:
+    creates: /home/charlie/.google_authenticator
+
+- name: Restreindre l'authentification SSH pour charlie
+  blockinfile:
+    path: /etc/ssh/sshd_config
+    marker: "# {mark} CHARLIE"
+    block: |
+      Match User charlie
+        AuthenticationMethods publickey,keyboard-interactive
+  notify: Redémarrer SSH
+
+- name: Activer Google Authenticator pour sudo
+  lineinfile:
+    path: /etc/pam.d/sudo
+    insertafter: '^\s*#%PAM-1.0'
+    line: 'auth required pam_google_authenticator.so nullok'
+
+- name: Configurer sudoers pour charlie
+  copy:
+    dest: /etc/sudoers.d/20-charlie
+    mode: '0440'
+    content: |
+      # Sudo redemande code TOTP toutes les 15 minutes
+      Defaults:charlie timestamp_timeout=15
+      charlie ALL=(ALL) ALL
+
+# ---- Utilisateur goose ----
+- name: Créer l'utilisateur goose
+  user:
+    name: goose
+    groups: "TOPGUN"
+    shell: /bin/bash
+    create_home: yes
+
+- name: Restreindre SSH pour goose
+  blockinfile:
+    path: /etc/ssh/sshd_config
+    marker: "# {mark} GOOSE"
+    block: |
+      Match User goose
+        X11Forwarding no        # désactive X11
+        AllowTcpForwarding no   # désactive port forwarding
+        PermitTunnel no         # désactive tunnel
+  notify: Redémarrer SSH

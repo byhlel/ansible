@@ -20,7 +20,7 @@
     enabled: yes
     state: started
 
-- name: Appliquer immédiatement la configuration nftables
+- name: Appliquer la configuration nftables
   ansible.builtin.command: nft -f /etc/nftables.conf
 
 - name: Configurer jail SSH pour Fail2Ban
