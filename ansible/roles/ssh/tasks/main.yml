@@ -4,6 +4,7 @@
     name:
       - openssh-server               # Serveur SSH
       - libpam-google-authenticator  # Module PAM pour TOTP
+      - python3-pexpect            # Pour le module expect
     state: present
     update_cache: yes
 
