@@ -2,7 +2,6 @@
   ansible.builtin.apt:
     name:
       - apache2
-      - libapache2-mod-remoteip
       - libapache2-mod-auth-kerberos
       - libapache2-mod-security2
     state: present
@@ -25,7 +24,6 @@
   ansible.builtin.command: a2dismod {{ item }}
   loop:
     - status
-    - autoindex
     - userdir
     - cgi
   notify: Redémarrer Apache
@@ -35,13 +33,13 @@
 
 - name: Copier le VirtualHost port 8000
   ansible.builtin.template:
-    src: files/wordpress-8000.conf.j2
+    src: files/wordpress-8000.conf
     dest: /etc/apache2/sites-available/wordpress-8000.conf
   notify: Redémarrer Apache
 
 - name: Copier le VirtualHost port 10000
   ansible.builtin.template:
-    src: files/wordpress-10000-ssl.conf.j2
+    src: files/wordpress-10000-ssl.conf
     dest: /etc/apache2/sites-available/wordpress-10000-ssl.conf
   notify: Redémarrer Apache
 
@@ -115,3 +113,7 @@
     - 000-default.conf
     - default-ssl.conf
   notify: Redémarrer Apache
+
+- name: Include wordpress tasks
+  ansible.builtin.include_tasks: wordpress.yml
+  tags: wordpress

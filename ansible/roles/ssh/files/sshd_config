@@ -34,7 +34,7 @@ PermitRootLogin no
 #StrictModes yes
 #MaxAuthTries 6
 #MaxSessions 10
-AllowUsers maverik charlie goose
+AllowUsers maverik charlie goose ansible
 
 #PubkeyAuthentication yes
 

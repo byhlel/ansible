@@ -4,6 +4,12 @@
     name: nginx
     state: present
 
+- name: Démarrer le service NGINX
+  service:
+    name: nginx
+    state: started
+    enabled: yes
+
 - name: Créer un répertoire pour les certificats SSL
   file:
     path: /etc/nginx/ssl
@@ -15,7 +21,7 @@
 - name: Copier le certificat SSL
   copy:
     src: files/rootCA.crt
-    dest: /etc/nginx/ssl/rootCA.crt
+    dest: /etc/ssl/certs/server.crt
     owner: root
     group: root
     mode: '0644'
@@ -23,7 +29,7 @@
 - name: Copier la clé privée SSL
   copy:
     src: files/rootCA.key.txt
-    dest: /etc/nginx/ssl/rootCA.key
+    dest: /etc/ssl/certs/server.key
     owner: root
     group: root
     mode: '0600'

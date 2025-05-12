@@ -1,7 +1,9 @@
- vars:
-    db_name: "my_app_db"
-    db_user: "my_app_user"
-    db_password: "secure_password123"
+- name: Definir les variables de connexion à la base de données:
+  ansible.builtin.set_fact:
+    mysql_root_password: "root"
+    db_name: "wordpress"
+    db_user: "wpuser"
+    db_password: "root"
 
 - name: Installer MariaDB
   ansible.builtin.apt:
@@ -31,10 +33,10 @@
     state: started
 
 - name: Install MySQL Python client
-      ansible.builtin.apt:
-        name: python3-pymysql
-        state: present
-      when: ansible_os_family == 'Debian'
+  ansible.builtin.apt:
+    name: python3-pymysql
+    state: present
+  when: ansible_os_family == 'Debian'
 
 - name: Ensure database exists
   community.mysql.mysql_db:

@@ -26,7 +26,7 @@
 
 - name: Copier la configuration PAM commune
   ansible.builtin.copy:
-    src: common_auth
+    src: files/common-auth
     dest: /etc/pam.d/common-auth
     owner: root
     group: root
