@@ -1,4 +1,4 @@
-- name: Definir les variables de connexion à la base de données:
+- name: Definir les variables de connexion à la base de données
   ansible.builtin.set_fact:
     mysql_root_password: "root"
     db_name: "wordpress"
